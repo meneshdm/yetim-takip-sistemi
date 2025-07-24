@@ -1,0 +1,129 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Group {
+  id                String   @id @default(cuid())
+  name              String
+  perPersonFee      Float?   // Kişi başı ödeme tutarı
+  startMonth        Int?     // Başlangıç ayı (1-12)
+  startYear         Int?     // Başlangıç yılı
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  members           GroupMember[]
+  orphans           OrphanAssignment[]
+  orphanPayments    GroupOrphanPayment[]
+  payments          Payment[]
+}
+
+model Person {
+  id        String   @id @default(cuid())
+  name      String
+  email     String?
+  phone     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  groupMemberships GroupMember[]
+  payments         Payment[]
+}
+
+model Orphan {
+  id          String   @id @default(cuid())
+  name        String
+  age         Int?
+  location    String?
+  photo       String?
+  description String?
+  monthlyFee  Float
+  pdfFile     String?
+  documents   String?  // JSON string for uploaded documents
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  assignments     OrphanAssignment[]
+  orphanPayments  OrphanPayment[]
+}
+
+model GroupMember {
+  id           String  @id @default(cuid())
+  groupId      String
+  personId     String
+  customAmount Float?
+  isActive     Boolean @default(true)
+
+  group   Group  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  person  Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, personId])
+}
+
+model OrphanAssignment {
+  id       String @id @default(cuid())
+  groupId  String
+  orphanId String
+
+  group  Group  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  orphan Orphan @relation(fields: [orphanId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, orphanId])
+}
+
+model Payment {
+  id          String   @id @default(cuid())
+  personId    String
+  groupId     String   // Hangi grupta ödeme yapıldığını belirtir
+  amount      Float
+  month       Int      // 1-12
+  year        Int
+  isPaid      Boolean  @default(false)
+  paidAt      DateTime?
+  description String?
+  createdAt   DateTime @default(now())
+
+  person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+  group  Group  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@unique([personId, groupId, month, year])
+}
+
+model OrphanPayment {
+  id          String   @id @default(cuid())
+  orphanId    String
+  amount      Float
+  month       Int      // 1-12
+  year        Int
+  isPaid      Boolean  @default(false)
+  paidAt      DateTime?
+  description String?
+  createdAt   DateTime @default(now())
+
+  orphan Orphan @relation(fields: [orphanId], references: [id], onDelete: Cascade)
+
+  @@unique([orphanId, month, year])
+}
+
+model GroupOrphanPayment {
+  id          String   @id @default(cuid())
+  groupId     String
+  month       Int      // 1-12
+  year        Int
+  amount      Float    // Yetime yapılan ödeme tutarı
+  isPaid      Boolean  @default(false)
+  paidAt      DateTime?
+  description String?
+  createdAt   DateTime @default(now())
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, month, year])
+}
