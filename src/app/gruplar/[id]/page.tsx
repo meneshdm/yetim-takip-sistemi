@@ -315,12 +315,12 @@ export default function GroupDetailPage() {
     }
   };
 
-  const fetchPaymentStatuses = (members: GroupMember[]) => {
+  const fetchPaymentStatuses = (members: GroupMember[], groupData: GroupDetail) => {
     const statuses: PaymentStatus[] = [];
     
     // Grup başlangıç tarihini kullan
-    const groupStartMonth = group?.startMonth || 1;
-    const groupStartYear = group?.startYear || 2021;
+    const groupStartMonth = groupData.startMonth || 1;
+    const groupStartYear = groupData.startYear || 2021;
     const groupStartDate = new Date(groupStartYear, groupStartMonth - 1, 1);
     const currentDate = new Date();
     
@@ -345,7 +345,7 @@ export default function GroupDetailPage() {
           const monthKey = `${year}-${month.toString().padStart(2, '0')}`;
           
           // Kişi bu ay üye mi?
-          if (isPersonInGroupAtDate(member.person.name, group?.name || '', month, year)) {
+          if (isPersonInGroupAtDate(member.person.name, groupData.name, month, year)) {
             const payment = paymentMap.get(monthKey);
             
             if (payment) {
@@ -360,7 +360,7 @@ export default function GroupDetailPage() {
               }
             } else {
               // Ödeme yok, borçlu
-              const amount = member.customAmount || group?.perPersonFee || 0;
+              const amount = member.customAmount || groupData.perPersonFee || 0;
               monthlyPayments[monthKey] = {
                 isPaid: false,
                 amount: amount
@@ -403,7 +403,7 @@ export default function GroupDetailPage() {
       setCustomAmounts(amounts);
       
       // Ödeme durumlarını işle (artık sync)
-      fetchPaymentStatuses(data.members);
+      fetchPaymentStatuses(data.members, data);
       
       // Yetim ödemelerini set et (artık API'den geldi)
       if (data.orphanPayments) {
