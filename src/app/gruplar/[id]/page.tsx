@@ -343,7 +343,9 @@ export default function GroupDetailPage() {
         // Grup başlangıç tarihinden gelecek 6 aya kadar tüm ayları kontrol et
         for (let year = groupStartDate.getFullYear(); year <= futureDate.getFullYear(); year++) {
           const startMonth = year === groupStartDate.getFullYear() ? groupStartDate.getMonth() + 1 : 1;
-          const endMonth = year === futureDate.getFullYear() ? futureDate.getMonth() + 1 : 12;        for (let month = startMonth; month <= endMonth; month++) {
+          const endMonth = year === futureDate.getFullYear() ? futureDate.getMonth() + 1 : 12;
+          
+          for (let month = startMonth; month <= endMonth; month++) {
           const monthKey = `${year}-${month.toString().padStart(2, '0')}`;
           
           // Kişi bu ay üye mi?

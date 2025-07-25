@@ -17,8 +17,31 @@ export function AddOrphanModal({ isOpen, onClose, onSuccess }: AddOrphanModalPro
     monthlyFee: "",
     description: ""
   });
+  const [selectedPhoto, setSelectedPhoto] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+
+  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.type.startsWith('image/')) {
+        setSelectedPhoto(file);
+        const reader = new FileReader();
+        reader.onload = () => {
+          setPhotoPreview(reader.result as string);
+        };
+        reader.readAsDataURL(file);
+      } else {
+        setError('Lütfen sadece resim dosyası seçin');
+      }
+    }
+  };
+
+  const removePhoto = () => {
+    setSelectedPhoto(null);
+    setPhotoPreview(null);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,6 +49,26 @@ export function AddOrphanModal({ isOpen, onClose, onSuccess }: AddOrphanModalPro
     setError("");
 
     try {
+      let photoUrl = '';
+      
+      // Önce fotoğraf varsa upload et
+      if (selectedPhoto) {
+        const photoFormData = new FormData();
+        photoFormData.append('file', selectedPhoto);
+        photoFormData.append('type', 'orphan-photo');
+        
+        const photoResponse = await fetch('/api/upload', {
+          method: 'POST',
+          body: photoFormData,
+        });
+        
+        if (photoResponse.ok) {
+          const photoData = await photoResponse.json();
+          photoUrl = photoData.url;
+        }
+      }
+
+      // Yetim kaydını oluştur
       const response = await fetch('/api/orphans', {
         method: 'POST',
         headers: {
@@ -34,7 +77,8 @@ export function AddOrphanModal({ isOpen, onClose, onSuccess }: AddOrphanModalPro
         body: JSON.stringify({
           ...formData,
           age: formData.age ? parseInt(formData.age) : null,
-          monthlyFee: parseFloat(formData.monthlyFee)
+          monthlyFee: parseFloat(formData.monthlyFee),
+          photo: photoUrl
         }),
       });
 
@@ -46,6 +90,8 @@ export function AddOrphanModal({ isOpen, onClose, onSuccess }: AddOrphanModalPro
 
       // Başarılı
       setFormData({ name: "", age: "", location: "", monthlyFee: "", description: "" });
+      setSelectedPhoto(null);
+      setPhotoPreview(null);
       onSuccess();
       onClose();
     } catch (err) {
@@ -106,6 +152,52 @@ export function AddOrphanModal({ isOpen, onClose, onSuccess }: AddOrphanModalPro
                 placeholder="Örn: Zeynep Aslan"
                 disabled={isLoading}
               />
+            </div>
+
+            {/* Fotoğraf */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Fotoğraf
+              </label>
+              <div className="space-y-3">
+                {!photoPreview ? (
+                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handlePhotoChange}
+                      className="hidden"
+                      id="orphan-photo"
+                      disabled={isLoading}
+                    />
+                    <label 
+                      htmlFor="orphan-photo" 
+                      className="cursor-pointer flex flex-col items-center space-y-2"
+                    >
+                      <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center">
+                        <Plus className="h-6 w-6 text-gray-400" />
+                      </div>
+                      <span className="text-sm text-gray-500">Fotoğraf Seç</span>
+                    </label>
+                  </div>
+                ) : (
+                  <div className="relative">
+                    <img 
+                      src={photoPreview} 
+                      alt="Yetim fotoğrafı" 
+                      className="w-32 h-32 object-cover rounded-lg mx-auto"
+                    />
+                    <button
+                      type="button"
+                      onClick={removePhoto}
+                      className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-600"
+                      disabled={isLoading}
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Yaş */}

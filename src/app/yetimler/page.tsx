@@ -12,6 +12,7 @@ interface Orphan {
   name: string;
   age: number | null;
   location: string | null;
+  photo: string | null;
   monthlyFee: number;
   description: string | null;
   documents: string | null;
@@ -181,7 +182,15 @@ function YetimlerContent() {
                 <div key={orphan.id} className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
                   {/* Profil Resmi Alanı */}
                   <div className="h-48 bg-gray-200 flex items-center justify-center">
-                    <Heart className="h-16 w-16 text-gray-400" />
+                    {orphan.photo ? (
+                      <img 
+                        src={orphan.photo} 
+                        alt={orphan.name}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <Heart className="h-16 w-16 text-gray-400" />
+                    )}
                   </div>
 
                   <div className="p-6">

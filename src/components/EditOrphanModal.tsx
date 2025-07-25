@@ -12,6 +12,7 @@ interface EditOrphanModalProps {
     name: string;
     age: number | null;
     location: string | null;
+    photo: string | null;
     monthlyFee: number;
     description: string | null;
   } | null;
