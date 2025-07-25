@@ -318,30 +318,32 @@ export default function GroupDetailPage() {
   const fetchPaymentStatuses = (members: GroupMember[], groupData: GroupDetail) => {
     const statuses: PaymentStatus[] = [];
     
-    // Grup başlangıç tarihini kullan
-    const groupStartMonth = groupData.startMonth || 1;
-    const groupStartYear = groupData.startYear || 2021;
-    const groupStartDate = new Date(groupStartYear, groupStartMonth - 1, 1);
-    const currentDate = new Date();
-    
-    for (const member of members) {
-      const monthlyPayments: { [key: string]: { isPaid: boolean; amount: number; paidAt?: string } } = {};
-      let totalDebt = 0;
+      // Grup başlangıç tarihini kullan
+      const groupStartMonth = groupData.startMonth || 1;
+      const groupStartYear = groupData.startYear || 2021;
+      const groupStartDate = new Date(groupStartYear, groupStartMonth - 1, 1);
+      const currentDate = new Date();
       
-      // Ödeme verilerini işle (artık API'den geldi)
-      const payments = member.person.payments || [];
-      const paymentMap = new Map();
-      payments.forEach(payment => {
-        const key = `${payment.year}-${payment.month.toString().padStart(2, '0')}`;
-        paymentMap.set(key, payment);
-      });
+      // Gelecek 6 ayı da dahil et
+      const futureDate = new Date(currentDate);
+      futureDate.setMonth(currentDate.getMonth() + 6);
       
-      // Grup başlangıç tarihinden bugüne kadar tüm ayları kontrol et
-      for (let year = groupStartDate.getFullYear(); year <= currentDate.getFullYear(); year++) {
-        const startMonth = year === groupStartDate.getFullYear() ? groupStartDate.getMonth() + 1 : 1;
-        const endMonth = year === currentDate.getFullYear() ? currentDate.getMonth() + 1 : 12;
+      for (const member of members) {
+        const monthlyPayments: { [key: string]: { isPaid: boolean; amount: number; paidAt?: string } } = {};
+        let totalDebt = 0;
         
-        for (let month = startMonth; month <= endMonth; month++) {
+        // Ödeme verilerini işle (artık API'den geldi)
+        const payments = member.person.payments || [];
+        const paymentMap = new Map();
+        payments.forEach(payment => {
+          const key = `${payment.year}-${payment.month.toString().padStart(2, '0')}`;
+          paymentMap.set(key, payment);
+        });
+        
+        // Grup başlangıç tarihinden gelecek 6 aya kadar tüm ayları kontrol et
+        for (let year = groupStartDate.getFullYear(); year <= futureDate.getFullYear(); year++) {
+          const startMonth = year === groupStartDate.getFullYear() ? groupStartDate.getMonth() + 1 : 1;
+          const endMonth = year === futureDate.getFullYear() ? futureDate.getMonth() + 1 : 12;        for (let month = startMonth; month <= endMonth; month++) {
           const monthKey = `${year}-${month.toString().padStart(2, '0')}`;
           
           // Kişi bu ay üye mi?
@@ -355,17 +357,23 @@ export default function GroupDetailPage() {
                 paidAt: payment.paidAt
               };
               
-              if (!payment.isPaid) {
+              // Sadece geçmiş ve mevcut ay borcu sayılsın
+              if (!payment.isPaid && (year < currentDate.getFullYear() || 
+                  (year === currentDate.getFullYear() && month <= currentDate.getMonth() + 1))) {
                 totalDebt += payment.amount;
               }
             } else {
-              // Ödeme yok, borçlu
+              // Ödeme yok
               const amount = member.customAmount || groupData.perPersonFee || 0;
               monthlyPayments[monthKey] = {
                 isPaid: false,
                 amount: amount
               };
-              totalDebt += amount;
+              // Sadece geçmiş ve mevcut ay borcu sayılsın
+              if (year < currentDate.getFullYear() || 
+                  (year === currentDate.getFullYear() && month <= currentDate.getMonth() + 1)) {
+                totalDebt += amount;
+              }
             }
           }
         }
