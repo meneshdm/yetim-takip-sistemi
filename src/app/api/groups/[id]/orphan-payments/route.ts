@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { cache, CACHE_KEYS } from '@/lib/cache';
 
 export async function GET(
   request: NextRequest,
@@ -83,6 +84,9 @@ export async function POST(
         },
       });
 
+      // Dashboard cache'ini temizle çünkü bakiye değişti
+      cache.delete(CACHE_KEYS.DASHBOARD);
+
       return NextResponse.json({
         success: true,
         payment: {
@@ -103,6 +107,9 @@ export async function POST(
           paidAt: isPaid ? new Date() : null,
         },
       });
+
+      // Dashboard cache'ini temizle çünkü bakiye değişti
+      cache.delete(CACHE_KEYS.DASHBOARD);
 
       return NextResponse.json({
         success: true,
