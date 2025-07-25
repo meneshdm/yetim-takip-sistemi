@@ -16,13 +16,31 @@ export async function GET(
       include: {
         members: {
           include: {
-            person: true
+            person: {
+              include: {
+                payments: {
+                  where: {
+                    groupId: id
+                  },
+                  orderBy: [
+                    { year: 'desc' },
+                    { month: 'desc' }
+                  ]
+                }
+              }
+            }
           }
         },
         orphans: {
           include: {
             orphan: true
           }
+        },
+        orphanPayments: {
+          orderBy: [
+            { year: 'desc' },
+            { month: 'desc' }
+          ]
         }
       }
     });
@@ -47,7 +65,8 @@ export async function GET(
       ),
       createdAt: group.createdAt.toISOString(),
       members: group.members,
-      orphans: group.orphans
+      orphans: group.orphans,
+      orphanPayments: group.orphanPayments
     };
 
     return NextResponse.json(processedGroup);

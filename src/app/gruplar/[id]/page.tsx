@@ -11,6 +11,16 @@ interface Person {
   name: string;
   email?: string;
   phone?: string;
+  payments?: Payment[];
+}
+
+interface Payment {
+  id: string;
+  month: number;
+  year: number;
+  amount: number;
+  isPaid: boolean;
+  paidAt?: string;
 }
 
 interface Orphan {
@@ -44,6 +54,7 @@ interface GroupDetail {
   startYear?: number;
   members: GroupMember[];
   orphans: { orphan: Orphan }[];
+  orphanPayments?: GroupOrphanPayment[];
   totalMonthlyAmount: number;
   createdAt: string;
 }
@@ -272,59 +283,6 @@ export default function GroupDetailPage() {
     });
   };
 
-  const fetchOrphanPayments = async () => {
-    if (!group) return;
-    
-    try {
-      const groupStartMonth = group.startMonth || 1;
-      const groupStartYear = group.startYear || 2021;
-      const groupStartDate = new Date(groupStartYear, groupStartMonth - 1, 1);
-      const currentDate = new Date();
-      
-      const payments: GroupOrphanPayment[] = [];
-      
-      for (let year = groupStartDate.getFullYear(); year <= currentDate.getFullYear(); year++) {
-        const startMonth = year === groupStartDate.getFullYear() ? groupStartDate.getMonth() + 1 : 1;
-        const endMonth = year === currentDate.getFullYear() ? currentDate.getMonth() + 1 : 12;
-        
-        for (let month = startMonth; month <= endMonth; month++) {
-          try {
-            const response = await fetch(`/api/groups/${group.id}/orphan-payments?month=${month}&year=${year}`);
-            
-            if (response.ok) {
-              const payment = await response.json();
-              payments.push({
-                month,
-                year,
-                amount: payment?.amount || group.totalMonthlyAmount,
-                isPaid: payment?.isPaid || false,
-                paidAt: payment?.paidAt
-              });
-            } else {
-              payments.push({
-                month,
-                year,
-                amount: group.totalMonthlyAmount,
-                isPaid: false
-              });
-            }
-          } catch (error) {
-            payments.push({
-              month,
-              year,
-              amount: group.totalMonthlyAmount,
-              isPaid: false
-            });
-          }
-        }
-      }
-      
-      setOrphanPayments(payments);
-    } catch (err) {
-      console.error('Yetim ödemeleri getirilemedi:', err);
-    }
-  };
-
   const handleMarkOrphanPayment = async (month: number, year: number, isPaid: boolean) => {
     if (!group) return;
     
@@ -343,87 +301,86 @@ export default function GroupDetailPage() {
       });
 
       if (response.ok) {
-        await fetchOrphanPayments();
+        // Yetim ödemelerini yeniden getir
+        const updatedData = await fetch(`/api/groups/${groupId}`);
+        if (updatedData.ok) {
+          const data = await updatedData.json();
+          if (data.orphanPayments) {
+            setOrphanPayments(data.orphanPayments);
+          }
+        }
       }
     } catch (err) {
       alert('Yetim ödeme durumu güncellenemedi');
     }
   };
 
-  const fetchPaymentStatuses = async (members: GroupMember[]) => {
-    try {
-      const statuses: PaymentStatus[] = [];
+  const fetchPaymentStatuses = (members: GroupMember[]) => {
+    const statuses: PaymentStatus[] = [];
+    
+    // Grup başlangıç tarihini kullan
+    const groupStartMonth = group?.startMonth || 1;
+    const groupStartYear = group?.startYear || 2021;
+    const groupStartDate = new Date(groupStartYear, groupStartMonth - 1, 1);
+    const currentDate = new Date();
+    
+    for (const member of members) {
+      const monthlyPayments: { [key: string]: { isPaid: boolean; amount: number; paidAt?: string } } = {};
+      let totalDebt = 0;
       
-      // Grup başlangıç tarihini kullan
-      const groupStartMonth = group?.startMonth || 1;
-      const groupStartYear = group?.startYear || 2021;
-      const groupStartDate = new Date(groupStartYear, groupStartMonth - 1, 1);
-      const currentDate = new Date();
+      // Ödeme verilerini işle (artık API'den geldi)
+      const payments = member.person.payments || [];
+      const paymentMap = new Map();
+      payments.forEach(payment => {
+        const key = `${payment.year}-${payment.month.toString().padStart(2, '0')}`;
+        paymentMap.set(key, payment);
+      });
       
-      for (const member of members) {
-        const monthlyPayments: { [key: string]: { isPaid: boolean; amount: number; paidAt?: string } } = {};
-        let totalDebt = 0;
+      // Grup başlangıç tarihinden bugüne kadar tüm ayları kontrol et
+      for (let year = groupStartDate.getFullYear(); year <= currentDate.getFullYear(); year++) {
+        const startMonth = year === groupStartDate.getFullYear() ? groupStartDate.getMonth() + 1 : 1;
+        const endMonth = year === currentDate.getFullYear() ? currentDate.getMonth() + 1 : 12;
         
-        // Grup başlangıç tarihinden bugüne kadar tüm ayları kontrol et
-        for (let year = groupStartDate.getFullYear(); year <= currentDate.getFullYear(); year++) {
-          const startMonth = year === groupStartDate.getFullYear() ? groupStartDate.getMonth() + 1 : 1;
-          const endMonth = year === currentDate.getFullYear() ? currentDate.getMonth() + 1 : 12;
+        for (let month = startMonth; month <= endMonth; month++) {
+          const monthKey = `${year}-${month.toString().padStart(2, '0')}`;
           
-          for (let month = startMonth; month <= endMonth; month++) {
-            const monthKey = `${year}-${month.toString().padStart(2, '0')}`;
+          // Kişi bu ay üye mi?
+          if (isPersonInGroupAtDate(member.person.name, group?.name || '', month, year)) {
+            const payment = paymentMap.get(monthKey);
             
-            try {
-              const response = await fetch(`/api/payments?personId=${member.person.id}&month=${month}&year=${year}&groupId=${groupId}`);
+            if (payment) {
+              monthlyPayments[monthKey] = {
+                isPaid: payment.isPaid,
+                amount: payment.amount,
+                paidAt: payment.paidAt
+              };
               
-              if (response.ok) {
-                const payment = await response.json();
-                monthlyPayments[monthKey] = {
-                  isPaid: payment.isPaid,
-                  amount: payment.amount,
-                  paidAt: payment.paidAt
-                };
-                
-                if (!payment.isPaid && isPersonInGroupAtDate(member.person.name, group?.name || '', month, year)) {
-                  totalDebt += payment.amount;
-                }
-              } else {
-                // Ödeme bulunamadı, ama üye ise borçlu olarak işaretle
-                if (isPersonInGroupAtDate(member.person.name, group?.name || '', month, year)) {
-                  const amount = member.customAmount || group?.perPersonFee || 0;
-                  monthlyPayments[monthKey] = {
-                    isPaid: false,
-                    amount: amount
-                  };
-                  totalDebt += amount;
-                }
+              if (!payment.isPaid) {
+                totalDebt += payment.amount;
               }
-            } catch (error) {
-              // API hatası, ama üye ise borçlu olarak işaretle
-              if (isPersonInGroupAtDate(member.person.name, group?.name || '', month, year)) {
-                const amount = member.customAmount || group?.perPersonFee || 0;
-                monthlyPayments[monthKey] = {
-                  isPaid: false,
-                  amount: amount
-                };
-                totalDebt += amount;
-              }
+            } else {
+              // Ödeme yok, borçlu
+              const amount = member.customAmount || group?.perPersonFee || 0;
+              monthlyPayments[monthKey] = {
+                isPaid: false,
+                amount: amount
+              };
+              totalDebt += amount;
             }
           }
         }
-        
-        statuses.push({
-          personId: member.person.id,
-          personName: member.person.name,
-          customAmount: member.customAmount,
-          monthlyPayments,
-          totalDebt
-        });
       }
       
-      setPaymentStatuses(statuses);
-    } catch (err) {
-      console.error('Ödeme durumları getirilemedi:', err);
+      statuses.push({
+        personId: member.person.id,
+        personName: member.person.name,
+        customAmount: member.customAmount,
+        monthlyPayments,
+        totalDebt
+      });
     }
+    
+    setPaymentStatuses(statuses);
   };
 
   const fetchGroupDetail = async () => {
@@ -445,8 +402,13 @@ export default function GroupDetailPage() {
       });
       setCustomAmounts(amounts);
       
-      // Ödeme durumlarını getir
-      await fetchPaymentStatuses(data.members);
+      // Ödeme durumlarını işle (artık sync)
+      fetchPaymentStatuses(data.members);
+      
+      // Yetim ödemelerini set et (artık API'den geldi)
+      if (data.orphanPayments) {
+        setOrphanPayments(data.orphanPayments);
+      }
       
       setError("");
     } catch (err) {
@@ -513,7 +475,8 @@ export default function GroupDetailPage() {
       });
 
       if (response.ok) {
-        await fetchPaymentStatuses(group!.members);
+        // Hızlı güncellemek için sadece ilgili veriyi yenile
+        await fetchGroupDetail();
       }
     } catch (err) {
       alert('Ödeme kaydedilemedi');
@@ -528,7 +491,8 @@ export default function GroupDetailPage() {
       });
 
       if (response.ok) {
-        await fetchPaymentStatuses(group!.members);
+        // Hızlı güncellemek için sadece ilgili veriyi yenile
+        await fetchGroupDetail();
       }
     } catch (err) {
       alert('Ödeme iptal edilemedi');
@@ -539,11 +503,7 @@ export default function GroupDetailPage() {
     fetchGroupDetail();
   }, [groupId]);
 
-  useEffect(() => {
-    if (group) {
-      fetchOrphanPayments();
-    }
-  }, [group]);
+  // fetchOrphanPayments artık gerekli değil, veriler grup API'si ile gelir
 
   // Get list of months from group start to current (reversed order - newest first)
   const getMonthsList = () => {
